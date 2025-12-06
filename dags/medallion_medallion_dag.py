@@ -12,7 +12,7 @@ from pathlib import Path
 import pendulum
 from airflow import DAG
 from airflow.exceptions import AirflowException
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 # pylint: disable=import-error,wrong-import-position
 
@@ -69,6 +69,18 @@ def _run_dbt_command(command: str, ds_nodash: str) -> subprocess.CompletedProces
 #  (bronze, silver, gold) usando las funciones de transformación y
 #  los comandos de dbt.
 
+def _bronze_clean(execution_date: str, **_kwargs) -> None:
+    """
+    Toma la fecha de ejecución como string (YYYY-MM-DD),
+    la convierte a date y llama a clean_daily_transactions.
+    """
+    exec_date = datetime.strptime(execution_date, "%Y-%m-%d").date()
+
+    clean_daily_transactions(
+        execution_date=exec_date,
+        raw_dir=RAW_DIR,
+        clean_dir=CLEAN_DIR,
+    )
 
 def build_dag() -> DAG:
     """Construct the medallion pipeline DAG with bronze/silver/gold tasks."""
@@ -94,7 +106,14 @@ def build_dag() -> DAG:
         #  * Asegurarse de que los paths usados en las funciones sean relativos a BASE_DIR.
         #  * Usar las funciones definidas arriba para cada etapa del pipeline.
 
-
+        bronze_clean = PythonOperator(
+            task_id="bronze_clean",
+            python_callable=_bronze_clean,
+            op_kwargs={
+                # Airflow inyecta la fecha de ejecución como "YYYY-MM-DD"
+                "execution_date": "{{ ds }}",
+            },
+        )
 
     return medallion_dag
 
