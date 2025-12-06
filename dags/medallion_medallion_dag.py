@@ -154,7 +154,13 @@ def build_dag() -> DAG:
                 "execution_date": "{{ ds }}",
             },
         )
-    
+
+        silver = PythonOperator(
+            task_id="silver_dbt_run",
+            python_callable=silver_task,
+            op_kwargs={"ds_nodash": "{{ ds_nodash }}"},
+        )
+
         gold_dbt_tests = PythonOperator(
             task_id="gold_dbt_tests",
             python_callable=_gold_dbt_tests,
@@ -163,12 +169,7 @@ def build_dag() -> DAG:
             },
         )
 
-        silver = PythonOperator(
-            task_id="silver_dbt_run",
-            python_callable=silver_task,
-            op_kwargs={"ds_nodash": "{{ ds_nodash }}"},
-        )
-        bronze_clean >> silver
+        bronze_clean >> silver >> gold_dbt_tests
 
     return medallion_dag
 
