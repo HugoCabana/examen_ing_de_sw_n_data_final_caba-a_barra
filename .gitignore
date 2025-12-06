@@ -4,6 +4,7 @@ __pycache__
 airflow_home
 
 # dbt
+logs
 dbt/logs/
 dbt/target/
 profiles/.user.yml
