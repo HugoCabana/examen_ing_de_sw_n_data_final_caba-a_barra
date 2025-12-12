@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pendulum
 from airflow import DAG
-from airflow.exceptions import AirflowException
+from airflow.exceptions import AirflowException, AirflowSkipException
 from airflow.providers.standard.operators.python import PythonOperator
 
 # pylint: disable=import-error,wrong-import-position
@@ -64,10 +64,21 @@ def _run_dbt_command(command: str, ds_nodash: str) -> subprocess.CompletedProces
         check=False,
     )
 
-
 # TODO: Definir las funciones necesarias para cada etapa del pipeline
 #  (bronze, silver, gold) usando las funciones de transformación y
 #  los comandos de dbt.
+
+def _abort_if_missing_raw(execution_date: str, **_kwargs) -> None:
+    """
+    Si no existe el archivo raw del día, se saltea la corrida del pipeline.
+    execution_date llega como "YYYY-MM-DD" (Airflow ds).
+    """
+    exec_date = datetime.strptime(execution_date, "%Y-%m-%d").date()
+    ds_nodash = exec_date.strftime("%Y%m%d")
+
+    raw_path = RAW_DIR / f"transactions_{ds_nodash}.csv"
+    if not raw_path.exists():
+        raise AirflowSkipException(f"No existe archivo raw para {ds_nodash}: {raw_path}")
 
 def _bronze_clean(execution_date: str, **_kwargs) -> None:
     """
@@ -133,7 +144,6 @@ def build_dag() -> DAG:
         max_active_runs=1,
     ) as medallion_dag:
 
-
         # TODO:
         # * Agregar las tasks necesarias del pipeline para completar lo pedido por el enunciado.
         # * Usar PythonOperator con el argumento op_kwargs para pasar ds_nodash a las funciones.
@@ -145,6 +155,18 @@ def build_dag() -> DAG:
         #    de salida tengan nombres únicos por fecha.
         #  * Asegurarse de que los paths usados en las funciones sean relativos a BASE_DIR.
         #  * Usar las funciones definidas arriba para cada etapa del pipeline.
+        
+        # A continuación se definen las tasks del pipeline:
+        # 1. Se verifica la existencia del archivo raw del día y se saltea la corrida si no está disponible.
+        # 2. Se ejecuta la limpieza (Bronze).
+        # 3. Se materializan los modelos con dbt (Silver).
+        # 4. Se ejecutan los tests de dbt y se registran los resultados de calidad (Gold).
+
+        check_raw_exists = PythonOperator(
+            task_id="check_raw_exists",
+            python_callable=_abort_if_missing_raw,
+            op_kwargs={"execution_date": "{{ ds }}"}
+        )
 
         bronze_clean = PythonOperator(
             task_id="bronze_clean",
@@ -169,7 +191,7 @@ def build_dag() -> DAG:
             },
         )
 
-        bronze_clean >> silver >> gold_dbt_tests
+        check_raw_exists >> bronze_clean >> silver >> gold_dbt_tests
 
     return medallion_dag
 
