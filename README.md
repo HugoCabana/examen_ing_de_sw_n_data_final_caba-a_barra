@@ -203,7 +203,32 @@ isort dags include && black dags include && pylint dags/*.py include/*.py
 Necesarios para completar el workflow:
 - [x] Implementar tareas de Airflow.
 - [x] Implementar modelos de dbt según cada archivo schema.yml.
-- [ ] Implementar pruebas de dbt para asegurar que las tablas gold estén correctas.
-- [ ] Documentar mejoras posibles para el proceso considerado aspectos de escalabilidad y modelado de datos.
+
+  Los dos TODOs previos fueron implementados según los lineamientos del presente
+- [x] Implementar pruebas de dbt para asegurar que las tablas gold estén correctas.
+
+  Se incorporaron **pruebas adicionales de dbt** orientadas a validar la **coherencia lógica y semántica** de la tabla gold `fct_customer_transactions`, más allá de las validaciones genéricas (not null, no negativos, valores aceptados).
+
+  En particular, se implementaron **tests singulares** que verifican:
+
+  * **Coherencia de montos**: para cada customer, el monto de transacciones completadas (`total_amount_completed`) es menor o igual al monto total de transacciones (`total_amount_all`), dado que las transacciones completadas constituyen un subconjunto del total.
+  * **Coherencia entre capas silver y gold**: el campo `transaction_count` en la tabla gold refleja exactamente la cantidad de transacciones del customer presentes en la tabla silver (`stg_transactions`), garantizando que no existan duplicaciones, filtrados incorrectos o inconsistencias entre capas.
+
+  Estos tests se ejecutan automáticamente con `dbt test` y su resultado queda registrado como parte de la capa **Gold** en los artefactos de data quality generados por el pipeline.
+
+- [x] Documentar mejoras posibles para el proceso considerado aspectos de escalabilidad y modelado de datos.
 Nice to hace:
-- [ ] Manejar el caso que no haya archivos para el dia indicado.
+
+  - **Particionado por fecha (en carpetas)**: en lugar de un único parquet diario con la fecha en el nombre, guardar como `data/clean/transaction_date=YYYY-MM-DD/` y dentro uno o más `part-*.parquet`. Si el volumen crece, esto permite dividir un día en varios archivos más manejables (por tamaño) sin cambiar la lógica del pipeline.
+
+  - **Modelo dimensional simple**: si se incorporan campos descriptivos (p. ej. datos de cliente o calendario), crear `dim_customer` / `dim_date` como modelos dbt y referenciarlas desde las tablas `fct_*` para organizar el Gold como data mart (hechos + dimensiones).  
+
+  - **SCD (cambios lentos en dimensiones)**: si a futuro existiera `dim_customer` e incorpora atributos que cambian con el tiempo (p. ej. segmento/ciudad), definir si se guardará **solo el último valor** (sin historial) o **historial por versiones** (con vigencia desde/hasta), para que los reportes puedan reproducir el estado “en ese momento”. 
+
+- [x] Manejar el caso que no haya archivos para el dia indicado.
+
+  Esto se resolvió añadiendo una task inicial al DAG `medallion_pipeline`. De esta forma, las tasks del pipeline quedan:
+  1. Se verifica la existencia del archivo raw del día y se saltea la corrida si no está disponible.
+  2. Se ejecuta la limpieza (Bronze).
+  3. Se materializan los modelos con dbt (Silver).
+  4. Se ejecutan los tests de dbt y se registran los resultados de calidad (Gold).
