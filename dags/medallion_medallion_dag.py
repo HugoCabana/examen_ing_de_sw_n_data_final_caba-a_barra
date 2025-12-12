@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pendulum
 from airflow import DAG
-from airflow.exceptions import AirflowException, AirflowSkipException
+from airflow.exceptions import AirflowException
 from airflow.providers.standard.operators.python import PythonOperator
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -173,7 +173,7 @@ def build_dag() -> DAG:
             },
         )
 
-        check_raw_exists >> bronze_clean >> silver >> gold_dbt_tests
+        bronze_clean >> silver >> gold_dbt_tests
 
     return medallion_dag
 
