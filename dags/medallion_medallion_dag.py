@@ -82,6 +82,46 @@ def _bronze_clean(execution_date: str, **_kwargs) -> None:
         clean_dir=CLEAN_DIR,
     )
 
+def silver_task(ds_nodash: str):
+    """
+    Ejecuta dbt run filtrando modelos silver.
+    """
+    result = _run_dbt_command("run", ds_nodash)
+
+    if result.returncode != 0:
+        raise AirflowException(f"dbt run (silver) falló: {result.stderr}")
+
+    return result.stdout
+
+def _gold_dbt_tests(ds_nodash: str, **_kwargs) -> None:
+    """
+    Ejecuta `dbt test`, escribe el archivo de data quality
+    y falla el task si hay algún test fallido.
+    """
+    QUALITY_DIR.mkdir(parents=True, exist_ok=True)
+    result = _run_dbt_command("test", ds_nodash)
+
+    status = "passed" if result.returncode == 0 else "failed"
+    output_path = QUALITY_DIR / f"dq_results_{ds_nodash}.json"
+
+    payload = {
+        "ds_nodash": ds_nodash,
+        "status": status,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }
+
+    with output_path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+    # Si hubo tests fallidos, marcamos el task como failed,
+    # pero el JSON ya quedó generado para monitoreo.
+    if result.returncode != 0:
+        raise AirflowException(
+            f"dbt test failed for {ds_nodash}."
+            f"See data quality results at: {output_path}"
+        )
+
 def build_dag() -> DAG:
     """Construct the medallion pipeline DAG with bronze/silver/gold tasks."""
     with DAG(
@@ -114,6 +154,22 @@ def build_dag() -> DAG:
                 "execution_date": "{{ ds }}",
             },
         )
+
+        silver = PythonOperator(
+            task_id="silver_dbt_run",
+            python_callable=silver_task,
+            op_kwargs={"ds_nodash": "{{ ds_nodash }}"},
+        )
+
+        gold_dbt_tests = PythonOperator(
+            task_id="gold_dbt_tests",
+            python_callable=_gold_dbt_tests,
+            op_kwargs={
+                "ds_nodash": "{{ ds_nodash }}",
+            },
+        )
+
+        bronze_clean >> silver >> gold_dbt_tests
 
     return medallion_dag
 

@@ -3,5 +3,15 @@ __pycache__
 .venv
 airflow_home
 
+# dbt
+logs
+dbt/logs/
+dbt/target/
+profiles/.user.yml
+
+# dbt warehouse
+warehouse/*.duckdb
+warehouse/*.duckdb.wal
+
 # Propios
 init.sh
