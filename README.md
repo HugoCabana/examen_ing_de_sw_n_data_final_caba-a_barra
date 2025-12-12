@@ -203,25 +203,7 @@ isort dags include && black dags include && pylint dags/*.py include/*.py
 Necesarios para completar el workflow:
 - [x] Implementar tareas de Airflow.
 - [x] Implementar modelos de dbt según cada archivo schema.yml.
-
-  Los dos TODOs previos fueron implementados según los lineamientos del presente
-- [x] Implementar pruebas de dbt para asegurar que las tablas gold estén correctas.
-
-  Se incorporaron **pruebas adicionales de dbt** orientadas a validar la **coherencia lógica y semántica** de la tabla gold `fct_customer_transactions`, más allá de las validaciones genéricas (not null, no negativos, valores aceptados).
-
-  En particular, se implementaron **tests singulares** que verifican:
-
-  * **Coherencia de montos**: para cada customer, el monto de transacciones completadas (`total_amount_completed`) es menor o igual al monto total de transacciones (`total_amount_all`), dado que las transacciones completadas constituyen un subconjunto del total.
-  * **Coherencia entre capas silver y gold**: el campo `transaction_count` en la tabla gold refleja exactamente la cantidad de transacciones del customer presentes en la tabla silver (`stg_transactions`), garantizando que no existan duplicaciones, filtrados incorrectos o inconsistencias entre capas.
-
-  Estos tests se ejecutan automáticamente con `dbt test` y su resultado queda registrado como parte de la capa **Gold** en los artefactos de data quality generados por el pipeline.
-
+- [ ] Implementar pruebas de dbt para asegurar que las tablas gold estén correctas.
 - [ ] Documentar mejoras posibles para el proceso considerado aspectos de escalabilidad y modelado de datos.
 Nice to hace:
-- [x] Manejar el caso que no haya archivos para el dia indicado.
-
-  Esto se resolvió añadiendo una task inicial al DAG `medallion_pipeline`. De esta forma, las tasks del pipeline quedan:
-  1. Se verifica la existencia del archivo raw del día y se saltea la corrida si no está disponible.
-  2. Se ejecuta la limpieza (Bronze).
-  3. Se materializan los modelos con dbt (Silver).
-  4. Se ejecutan los tests de dbt y se registran los resultados de calidad (Gold).
+- [ ] Manejar el caso que no haya archivos para el dia indicado.
