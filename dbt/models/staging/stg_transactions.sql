@@ -8,7 +8,7 @@ with source as (
     )
 ),
 
--- TODO: Completar el modelo para que cree la tabla staging con los tipos adecuados segun el schema.yml.
+-- Crea la tabla staging con los tipos adecuados segun el schema.yml.
 
 typed as (
     select
